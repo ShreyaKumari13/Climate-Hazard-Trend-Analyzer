@@ -3,8 +3,10 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   PointElement,
   LineElement,
+  LineController,
   Title,
   Tooltip,
   Legend,
@@ -12,12 +14,21 @@ import {
 import { Chart } from "react-chartjs-2";
 import { hazardMeta } from "./HazardSelect.jsx";
 
+// This is a mixed bar + line chart, so it uses the generic <Chart> component.
+// <Bar>/<Line> auto-register their controller; <Chart> does not - registering
+// only BarElement/LineElement gives the drawing primitives without the
+// controllers, which fails at runtime with:
+//   Error: "bar" is not a registered controller
+// A production build compiles fine either way, so this is guarded by
+// scripts/verify-chart-registry.mjs (npm run verify).
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   PointElement,
   LineElement,
+  LineController,
   Title,
   Tooltip,
   Legend
