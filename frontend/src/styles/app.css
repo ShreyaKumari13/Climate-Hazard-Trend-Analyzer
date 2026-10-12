@@ -1,0 +1,362 @@
+:root {
+  --bg: #f4f6f5;
+  --panel: #ffffff;
+  --text: #1c2b26;
+  --muted: #5c6b66;
+  --accent: #1f6f54;
+  --accent-soft: #e4f0eb;
+  --chart-line: #e07a3c;
+  --grid: rgba(28, 43, 38, 0.1);
+  --border: #e2e8e5;
+  --danger: #c0392b;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 6px 18px rgba(0, 0, 0, 0.05);
+}
+
+:root.dark {
+  --bg: #0e1613;
+  --panel: #16211d;
+  --text: #e7efec;
+  --muted: #9bb0a8;
+  --accent: #35b388;
+  --accent-soft: #15332a;
+  --chart-line: #f0945a;
+  --grid: rgba(231, 239, 236, 0.1);
+  --border: #26332e;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #0e1613;
+    --panel: #16211d;
+    --text: #e7efec;
+    --muted: #9bb0a8;
+    --accent: #35b388;
+    --accent-soft: #15332a;
+    --chart-line: #f0945a;
+    --grid: rgba(231, 239, 236, 0.1);
+    --border: #26332e;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--accent);
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.theme-toggle {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.controls,
+.results {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.controls h3,
+.chart-header h3 {
+  margin: 14px 0 10px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.controls h3:first-child {
+  margin-top: 0;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.field span {
+  font-weight: 600;
+}
+
+.latlon {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+select,
+input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+select:focus,
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.map-wrap {
+  margin-top: 12px;
+}
+
+.map {
+  height: 200px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.map-hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.btn-primary {
+  margin-top: 16px;
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+
+/* --- Results --- */
+.insight-card {
+  margin-bottom: 18px;
+}
+
+.insight-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.insight-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+.badge-sig {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge-neutral {
+  background: var(--border);
+  color: var(--muted);
+}
+
+.insight-text {
+  font-size: 1rem;
+  margin: 10px 0 16px;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.stat-hint {
+  font-size: 0.68rem;
+  color: var(--muted);
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* A number that isn't statistically significant must not read as a headline
+   result, so drop the accent colour and let it sit back. */
+.stat-muted .stat-value {
+  color: var(--muted);
+  font-weight: 600;
+}
+.stat-muted {
+  border-style: dashed;
+}
+
+.coverage-note,
+.cache-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
+.warnings {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.warnings summary {
+  cursor: pointer;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.btn-ghost {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 12px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chart-box {
+  height: 360px;
+  margin-top: 10px;
+}
+
+.error-box {
+  background: #fdecea;
+  color: var(--danger);
+  border: 1px solid #f5c6c0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+:root.dark .error-box {
+  background: #3a1c18;
+  border-color: #5c2a24;
+  color: #f0a79e;
+}
+
+.skeleton,
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.app-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--muted);
+}

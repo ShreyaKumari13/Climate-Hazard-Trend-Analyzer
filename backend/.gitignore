@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenvs (any name)
+.venv*/
+venv*/
+env/
+
+# Env & secrets - .env holds the MongoDB URI, never commit it
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.log

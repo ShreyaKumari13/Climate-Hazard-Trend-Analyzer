@@ -1,0 +1,34 @@
+# Render blueprint for the backend API.
+# This is a monorepo: the API lives in backend/ and the React app in frontend/.
+# Create the service via Render's Blueprint flow, or manually with
+# "backend" as the Root Directory. Vercel deploys frontend/ independently.
+services:
+  - type: web
+    name: climate-hazard-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGODB_URI
+        sync: false            # set in the Render dashboard (secret)
+      - key: MONGODB_DB
+        value: climate_hazard
+      - key: ALLOWED_ORIGINS
+        sync: false            # set to your Vercel URL, e.g. https://your-app.vercel.app
+      - key: ANALYSIS_CACHE_TTL
+        value: "604800"
+      - key: RAW_CACHE_TTL
+        value: "2592000"
+      - key: RATE_LIMIT
+        value: "30/minute"
+      - key: BASELINE_START
+        value: "1991"
+      - key: BASELINE_END
+        value: "2020"
+      - key: HEATWAVE_PERCENTILE
+        value: "95"
+      - key: HEATWAVE_MIN_DAYS
+        value: "3"
