@@ -7,13 +7,88 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .. import db
 from ..config import get_settings
-from ..models import MIN_YEAR, AnalysisQuery
+from ..models import MIN_YEAR, AnalysisQuery, HazardType
 from . import hazards, trends
 from .weather import DailySeries, fetch_daily
+
+
+@dataclass(frozen=True)
+class HazardSpec:
+    """Everything that differs between hazards, in one place.
+
+    Adding a hazard means adding a row here plus an enum member - the fetch,
+    caching, aggregation and trend layers are hazard-agnostic.
+    """
+
+    #: Which daily variable the rule is applied to.
+    variable: str
+    #: "above" (heat, rainfall) or "below" (dry days).
+    direction: str
+    #: How per-event intensity is measured.
+    intensity: str
+    #: Unit of the threshold, for display.
+    unit: str
+    #: Noun used in the generated insight sentence.
+    metric_label: str
+    #: Human-readable statement of the rule, surfaced in the API response.
+    definition: str
+
+
+def _hazard_spec(hazard: HazardType, settings) -> HazardSpec:
+    if hazard is HazardType.heatwave:
+        return HazardSpec(
+            variable="tmax",
+            direction="above",
+            intensity="excess",
+            unit="°C",
+            metric_label="heatwave days",
+            definition=(
+                f"{settings.heatwave_min_days}+ consecutive days with daily maximum "
+                f"temperature above the {settings.heatwave_percentile:.0f}th percentile "
+                f"of the {settings.baseline_start}-{settings.baseline_end} baseline."
+            ),
+        )
+    if hazard is HazardType.heavy_rainfall:
+        return HazardSpec(
+            variable="precipitation",
+            direction="above",
+            intensity="peak",
+            unit="mm",
+            metric_label="heavy-rainfall days",
+            definition=(
+                f"Days with precipitation above the {settings.rainfall_percentile:.0f}th "
+                f"percentile of wet-day (>= {hazards.WET_DAY_MM:.0f} mm) precipitation in "
+                f"the {settings.baseline_start}-{settings.baseline_end} baseline "
+                "(ETCCDI R95p, 'very wet days')."
+            ),
+        )
+    if hazard is HazardType.drought:
+        return HazardSpec(
+            variable="precipitation",
+            direction="below",
+            intensity="none",
+            unit="mm",
+            metric_label="drought days",
+            definition=(
+                f"{settings.drought_min_days}+ consecutive dry days, where a dry day has "
+                f"less than {settings.dry_day_mm:.0f} mm of precipitation "
+                "(ETCCDI CDD, consecutive dry days)."
+            ),
+        )
+    raise ValueError(f"unsupported hazard: {hazard}")
+
+
+def _min_days(hazard: HazardType, settings) -> int:
+    return {
+        HazardType.heatwave: settings.heatwave_min_days,
+        HazardType.heavy_rainfall: settings.rainfall_min_days,
+        HazardType.drought: settings.drought_min_days,
+    }[hazard]
 
 
 def _analysis_key(q: AnalysisQuery) -> str:
@@ -26,6 +101,10 @@ def _analysis_key(q: AnalysisQuery) -> str:
         "hazard": q.hazard.value,
         "pct": settings.heatwave_percentile,
         "min_days": settings.heatwave_min_days,
+        "rain_pct": settings.rainfall_percentile,
+        "rain_min_days": settings.rainfall_min_days,
+        "dry_mm": settings.dry_day_mm,
+        "drought_min_days": settings.drought_min_days,
         "baseline": [settings.baseline_start, settings.baseline_end],
     }
     raw = json.dumps(payload, sort_keys=True)
@@ -90,35 +169,63 @@ async def run_analysis(q: AnalysisQuery) -> dict:
         i for i, d in enumerate(series.dates)
         if q.start_year <= int(d[:4]) <= q.end_year
     ]
-    req_missing = sum(1 for i in req_idx if series.tmax[i] is None)
+    _spec_var = _hazard_spec(q.hazard, settings).variable
+    _vals = getattr(series, _spec_var)
+    req_missing = sum(1 for i in req_idx if _vals[i] is None)
     if req_missing:
         frac = req_missing / max(1, len(req_idx))
+        label = "max-temperature" if _spec_var == "tmax" else "precipitation"
         warnings.append(
             f"{req_missing} of {len(req_idx)} days "
-            f"({frac:.1%}) had missing max-temperature data."
+            f"({frac:.1%}) had missing {label} data."
         )
 
-    threshold = hazards.compute_threshold(
-        series.dates, series.tmax,
-        settings.baseline_start, settings.baseline_end,
-        settings.heatwave_percentile,
-    )
+    spec = _hazard_spec(q.hazard, settings)
+    values = getattr(series, spec.variable)
+
+    if q.hazard is HazardType.heatwave:
+        threshold = hazards.compute_threshold(
+            series.dates, values,
+            settings.baseline_start, settings.baseline_end,
+            settings.heatwave_percentile,
+        )
+    elif q.hazard is HazardType.heavy_rainfall:
+        # Percentile over WET days only: including dry days would pull the
+        # percentile toward zero in arid climates and label light showers as
+        # extreme. This is the ETCCDI R95p convention.
+        threshold = hazards.compute_threshold(
+            series.dates, values,
+            settings.baseline_start, settings.baseline_end,
+            settings.rainfall_percentile,
+            include=lambda v: v >= hazards.WET_DAY_MM,
+        )
+    else:  # drought - a fixed WMO dry-day cutoff, not a percentile
+        threshold = hazards.fixed_threshold(
+            series.dates, values,
+            value=settings.dry_day_mm,
+            label=f"fixed {settings.dry_day_mm:.0f} mm/day (WMO dry-day definition)",
+        )
+
     if threshold is None:
-        raise ValueError("No valid temperature data available for this location/range.")
+        raise ValueError(
+            f"No valid {spec.variable} data available for this location/range."
+        )
 
     if threshold.fallback:
         warnings.append(
             f"The {settings.baseline_start}-{settings.baseline_end} baseline was "
-            f"unavailable for this location, so the {settings.heatwave_percentile:.0f}th-"
-            f"percentile threshold was derived from the {threshold.baseline_label} "
-            "record itself. Thresholds computed this way are not comparable with "
-            "other regions or time ranges."
+            f"unavailable for this location, so the threshold was derived from the "
+            f"{threshold.baseline_label} record itself. Thresholds computed this way "
+            "are not comparable with other regions or time ranges."
         )
 
-    events = hazards.detect_heatwaves(
-        series.dates, series.tmax, threshold.value, settings.heatwave_min_days
+    events = hazards.detect_events(
+        series.dates, values, threshold.value,
+        min_days=_min_days(q.hazard, settings),
+        direction=spec.direction,
+        intensity=spec.intensity,
     )
-    year_summaries = hazards.summarize_by_year(series.dates, series.tmax, events)
+    year_summaries = hazards.summarize_by_year(series.dates, values, events)
 
     # Restrict the reported series to the requested window: the fetch above is
     # deliberately wider (it covers the baseline), so trim it back here.
@@ -127,10 +234,12 @@ async def run_analysis(q: AnalysisQuery) -> dict:
     ]
 
     years = [ys.year for ys in year_summaries]
-    day_counts = [float(ys.heatwave_days) for ys in year_summaries]
+    day_counts = [float(ys.hazard_days) for ys in year_summaries]
     roll = trends.rolling_mean(day_counts, window=5)
     trend = trends.analyze_trend(years, day_counts)
-    insight = trends.build_insight(q.region_name, q.start_year, trend)
+    insight = trends.build_insight(
+        q.region_name, q.start_year, trend, metric_label=spec.metric_label
+    )
 
     series_out = []
     for ys, rm in zip(year_summaries, roll):
@@ -138,8 +247,8 @@ async def run_analysis(q: AnalysisQuery) -> dict:
             warnings.append(f"Year {ys.year} has low data coverage ({ys.coverage:.0%}).")
         series_out.append({
             "year": ys.year,
-            "heatwave_events": ys.event_count,
-            "heatwave_days": ys.heatwave_days,
+            "events": ys.event_count,
+            "hazard_days": ys.hazard_days,
             "mean_duration": round(ys.mean_duration, 2),
             "max_intensity": ys.max_intensity,
             "rolling_mean": rm,
@@ -163,7 +272,9 @@ async def run_analysis(q: AnalysisQuery) -> dict:
         "hazard": q.hazard.value,
         "start_year": q.start_year,
         "end_year": q.end_year,
-        "threshold_celsius": round(threshold.value, 2),
+        "threshold": round(threshold.value, 2),
+        "threshold_unit": spec.unit,
+        "hazard_definition": spec.definition,
         "baseline": threshold.baseline_label,
         "baseline_fallback": threshold.fallback,
         "baseline_days": threshold.n_days,

@@ -1,3 +1,5 @@
+import { hazardMeta } from "./HazardSelect.jsx";
+
 function Stat({ label, value, hint, muted }) {
   return (
     <div className={`stat${muted ? " stat-muted" : ""}`}>
@@ -9,9 +11,10 @@ function Stat({ label, value, hint, muted }) {
 }
 
 export default function InsightCard({ data }) {
+  const meta = hazardMeta(data.hazard);
   const t = data.trend;
-  const totalEvents = data.series.reduce((a, p) => a + p.heatwave_events, 0);
-  const totalDays = data.series.reduce((a, p) => a + p.heatwave_days, 0);
+  const totalEvents = data.series.reduce((a, p) => a + p.events, 0);
+  const totalDays = data.series.reduce((a, p) => a + p.hazard_days, 0);
   const avgCoverage =
     data.series.reduce((a, p) => a + p.coverage, 0) / (data.series.length || 1);
 
@@ -35,11 +38,11 @@ export default function InsightCard({ data }) {
       <p className="insight-text">{data.insight}</p>
 
       <div className="stats-row">
-        <Stat label="Heatwave events" value={totalEvents} />
-        <Stat label="Total heatwave days" value={totalDays} />
+        <Stat label="Events" value={totalEvents} />
+        <Stat label={`Total ${meta.metric.toLowerCase()}`} value={totalDays} />
         <Stat
-          label="Threshold (95th pct)"
-          value={`${data.threshold_celsius} °C`}
+          label={meta.thresholdLabel}
+          value={`${data.threshold} ${data.threshold_unit}`}
           hint={
             data.baseline_fallback
               ? `⚠ fallback baseline ${data.baseline}`

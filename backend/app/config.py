@@ -66,6 +66,16 @@ class Settings:
         self.heatwave_percentile: float = float(os.getenv("HEATWAVE_PERCENTILE", "95"))
         self.heatwave_min_days: int = int(os.getenv("HEATWAVE_MIN_DAYS", "3"))
 
+        # Heavy rainfall: ETCCDI R95p - days above the 95th percentile of
+        # baseline WET-day precipitation. One such day is already an event.
+        self.rainfall_percentile: float = float(os.getenv("RAINFALL_PERCENTILE", "95"))
+        self.rainfall_min_days: int = int(os.getenv("RAINFALL_MIN_DAYS", "1"))
+
+        # Drought: ETCCDI CDD - runs of consecutive dry days. A dry day is
+        # < 1 mm (WMO convention), so this rule uses no percentile.
+        self.dry_day_mm: float = float(os.getenv("DRY_DAY_MM", "1.0"))
+        self.drought_min_days: int = int(os.getenv("DROUGHT_MIN_DAYS", "15"))
+
 
 @lru_cache
 def get_settings() -> Settings:

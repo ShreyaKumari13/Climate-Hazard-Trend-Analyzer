@@ -17,18 +17,19 @@ def to_csv(response: dict) -> str:
     writer.writerow(["region", response.get("region_name") or ""])
     writer.writerow(["lat", response["lat"], "lon", response["lon"]])
     writer.writerow(["hazard", response["hazard"]])
-    writer.writerow(["threshold_celsius", response["threshold_celsius"]])
+    writer.writerow(["threshold", response["threshold"], response["threshold_unit"]])
+    writer.writerow(["definition", response["hazard_definition"]])
     writer.writerow(["baseline", response["baseline"]])
     writer.writerow(["insight", response["insight"]])
     writer.writerow([])
 
     writer.writerow([
-        "year", "heatwave_events", "heatwave_days",
+        "year", "events", "hazard_days",
         "mean_duration", "max_intensity", "rolling_mean", "coverage",
     ])
     for p in response["series"]:
         writer.writerow([
-            p["year"], p["heatwave_events"], p["heatwave_days"],
+            p["year"], p["events"], p["hazard_days"],
             p["mean_duration"], p["max_intensity"],
             p["rolling_mean"], p["coverage"],
         ])
@@ -70,16 +71,18 @@ def to_pdf(response: dict) -> bytes:
     elements.append(Spacer(1, 0.3 * cm))
     meta = (
         f"Hazard: {response['hazard']} &nbsp;|&nbsp; "
-        f"Threshold: {response['threshold_celsius']} °C &nbsp;|&nbsp; "
+        f"Threshold: {response['threshold']} {response['threshold_unit']} &nbsp;|&nbsp; "
         f"Baseline: {response['baseline']}"
     )
     elements.append(Paragraph(meta, styles["Normal"]))
+    elements.append(Spacer(1, 0.2 * cm))
+    elements.append(Paragraph(f"<i>{response['hazard_definition']}</i>", styles["Normal"]))
     elements.append(Spacer(1, 0.5 * cm))
 
     data = [["Year", "Events", "Days", "Mean dur.", "Max intensity", "Coverage"]]
     for p in response["series"]:
         data.append([
-            p["year"], p["heatwave_events"], p["heatwave_days"],
+            p["year"], p["events"], p["hazard_days"],
             p["mean_duration"],
             "" if p["max_intensity"] is None else p["max_intensity"],
             f"{p['coverage']:.0%}",

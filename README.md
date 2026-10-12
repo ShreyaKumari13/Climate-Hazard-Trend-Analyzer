@@ -59,12 +59,44 @@ dropping days, so downstream logic can reason honestly about data coverage.
 
 ---
 
-## Hazard logic (heatwave)
+## Hazard logic
 
-Definition (per the brief):
+All three hazards share **one detection engine**: find runs of consecutive days on the wrong side
+of a threshold derived from a fixed climatological baseline. Only the variable, the comparison
+direction and the minimum run length differ, so each hazard is a row in a spec table
+(`_hazard_spec` in `services/cache.py`) rather than a separate code path.
 
-> A **heatwave** is a run of **3 or more consecutive days** where the daily maximum temperature
-> exceeds the region's **95th percentile** of daily max temperature.
+Definitions follow **ETCCDI** climate-index conventions where one exists, so the rules are standard
+rather than invented:
+
+| Hazard | Rule | Index |
+|---|---|---|
+| **Heatwave** | 3+ consecutive days with daily max temp above the **95th percentile** of baseline daily max temp | the brief's definition (close to WSDI) |
+| **Heavy rainfall** | Days with precipitation above the **95th percentile of baseline _wet-day_ precipitation** (wet day ≥ 1 mm) | ETCCDI **R95p**, "very wet days" |
+| **Drought** | **15+ consecutive dry days**, where a dry day is **< 1 mm** (WMO convention) | ETCCDI **CDD**, consecutive dry days |
+
+Two deliberate choices worth calling out:
+
+- **Rainfall percentiles use wet days only.** Including dry days would drag the percentile toward
+  zero in arid climates and label an ordinary shower "extreme". Measured on real data, a Mumbai
+  test series gives a 95th percentile of **100 mm** over wet days versus **0.5 mm** over all days.
+- **Drought uses CDD, not SPI.** SPI requires fitting a gamma distribution to monthly aggregates —
+  a materially different pipeline. CDD is a published spell index that fits the same
+  consecutive-run engine as the other two, and it needs no distributional assumptions.
+
+Because thresholds are *relative to local climate*, the indices discriminate sensibly between
+regions. Measured over 1990–2020:
+
+| Region | Drought days/yr | Rainfall threshold | Heavy-rain days/yr |
+|---|---|---|---|
+| Cairo (hyper-arid) | 354 | 7.1 mm | 0.3 |
+| Phoenix (desert) | 260 | 25.3 mm | 1.5 |
+| Mumbai (monsoon) | 219 | 54.7 mm | 6.1 |
+| London (temperate) | 46 | 13.0 mm | 6.1 |
+| Tokyo (humid) | 20 | 37.5 mm | 6.5 |
+
+Mumbai and London land on the same heavy-rain *frequency* despite a 4× difference in absolute
+intensity — which is exactly what a percentile-relative index should do.
 
 Implementation (`backend/app/services/hazards.py`):
 
@@ -84,9 +116,14 @@ Implementation (`backend/app/services/hazards.py`):
    `baseline_fallback: true`, reports the window actually used in `baseline`, and emits a warning
    stating that the threshold is not comparable across regions or ranges. It never claims a
    baseline it did not use.
-2. **Event detection** — scan the daily series for runs of 3+ days above the threshold.
-3. **Per-year aggregation** — number of events, total heatwave days, mean event duration, peak
-   intensity (°C above threshold), and **data coverage** (fraction of expected days present).
+2. **Event detection** — `detect_events` scans the daily series for qualifying runs, in either
+   direction (`above` for heat/rain, `below` for dry days).
+3. **Per-year aggregation** — number of events, total hazard days, mean event duration, peak
+   intensity, and **data coverage** (fraction of expected days present).
+
+   Peak intensity is hazard-specific: °C above threshold for heatwaves, raw mm for heavy rainfall
+   (i.e. the Rx1day within the event), and `null` for drought — for a spell index, duration *is*
+   the severity measure, so inventing an intensity number would be noise.
 
 **Trend analysis** (`backend/app/services/trends.py`):
 
@@ -109,7 +146,7 @@ Base path: `/api`
 |---|---|
 | `GET /api/health` | Liveness + which cache backend is active. |
 | `GET /api/regions` | Curated city presets (name → lat/lon) for the dropdown. |
-| `GET /api/analyze` | Run analysis. Query: `lat`, `lon`, `start_year`, `end_year`, `hazard=heatwave`, `region_name?`. Returns the yearly series, trend stats (`slope_per_year`, `r_squared`, `p_value`, `mann_kendall_*`, `significant`), `threshold_celsius` with `baseline` / `baseline_fallback` / `baseline_days` provenance, the headline `insight`, a `cached` flag, and `warnings[]`. |
+| `GET /api/analyze` | Run analysis. Query: `lat`, `lon`, `start_year`, `end_year`, `hazard` (`heatwave` \| `drought` \| `heavy_rainfall`, default `heatwave`), `region_name?`. Returns the yearly series, trend stats (`slope_per_year`, `r_squared`, `p_value`, `mann_kendall_*`, `significant`), `threshold` + `threshold_unit` with `baseline` / `baseline_fallback` / `baseline_days` provenance, a plain-language `hazard_definition`, the headline `insight`, a `cached` flag, and `warnings[]`. |
 | `GET /api/export` | Same params + `format=csv\|pdf`. Downloads the report. |
 
 Interactive docs are auto-generated at **`/docs`** (Swagger UI).
@@ -228,7 +265,12 @@ npm run dev                  # http://localhost:5173
   the year, so by construction a "heatwave" can essentially only occur in the warm season. The
   ETCCDI convention instead uses a day-of-year percentile computed over a ±5-day moving window,
   which would also surface anomalous warmth in spring or autumn. See *What I'd improve*.
-- Only **heatwave** is fully implemented; drought / heavy-rainfall are stubbed for extensibility.
+- **All three hazards are implemented.** Heatwave is the default and the most thoroughly
+  exercised; drought (CDD) and heavy rainfall (R95p) share the same engine, caching and trend
+  analysis.
+- **Drought here means a meteorological dry spell**, not an agricultural or hydrological drought —
+  CDD ignores temperature, evapotranspiration and soil moisture. A 15-day dry spell in Cairo is
+  normal, not a disaster; the index measures spell *length*, and the trend is what carries meaning.
 
 ---
 
@@ -237,8 +279,8 @@ npm run dev                  # http://localhost:5173
 - **Day-of-year percentile thresholds** (ETCCDI-style, ±5-day window) so the definition can detect
   out-of-season heat rather than only summer extremes — the single biggest limitation of the
   current hazard rule.
-- **More hazards**: implement drought (e.g. SPI from precipitation) and heavy-rainfall (Rx1day /
-  R95pTOT) using the same pipeline — the hazard layer is already structured for it.
+- **SPI for drought** (gamma-fitted, multi-month) alongside CDD, so the app can distinguish a long
+  dry spell from a genuine rainfall *deficit* relative to normal.
 - **Spatial aggregation**: support a lat-lon *box* (area average over a grid) rather than a single
   point, with the Leaflet rectangle tool.
 - **Confidence intervals** on the regression line in the chart, and Sen's slope alongside

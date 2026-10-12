@@ -60,8 +60,11 @@ class AnalysisQuery(BaseModel):
 
 class YearPoint(BaseModel):
     year: int
-    heatwave_events: int
-    heatwave_days: int
+    #: Number of discrete hazard events starting in this year.
+    events: int
+    #: Total days across those events (hazard-neutral: heatwave days, drought
+    #: days or heavy-rainfall days depending on the requested hazard).
+    hazard_days: int
     mean_duration: float
     max_intensity: float | None
     rolling_mean: float | None = None
@@ -85,7 +88,11 @@ class AnalysisResponse(BaseModel):
     hazard: HazardType
     start_year: int
     end_year: int
-    threshold_celsius: float
+    #: Threshold value in ``threshold_unit`` (°C for heatwave, mm otherwise).
+    threshold: float
+    threshold_unit: str
+    #: Plain-language statement of the rule that was applied.
+    hazard_definition: str
     #: The year window the threshold was actually computed from.
     baseline: str
     #: True when the configured baseline was unavailable and the threshold was

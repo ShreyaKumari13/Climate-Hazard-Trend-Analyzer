@@ -10,6 +10,7 @@ import {
   Legend,
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
+import { hazardMeta } from "./HazardSelect.jsx";
 
 ChartJS.register(
   CategoryScale,
@@ -39,9 +40,10 @@ function regressionLine(years, values) {
   return years.map((y) => Math.max(0, slope * y + intercept));
 }
 
-export default function TrendChart({ series }) {
+export default function TrendChart({ series, hazard }) {
+  const meta = hazardMeta(hazard);
   const years = series.map((p) => p.year);
-  const days = series.map((p) => p.heatwave_days);
+  const days = series.map((p) => p.hazard_days);
   const rolling = series.map((p) => p.rolling_mean);
   const trend = regressionLine(years, days);
 
@@ -56,7 +58,7 @@ export default function TrendChart({ series }) {
     datasets: [
       {
         type: "bar",
-        label: "Heatwave days / year",
+        label: meta.seriesLabel,
         data: days,
         backgroundColor: accent + "cc",
         borderRadius: 3,
@@ -99,7 +101,7 @@ export default function TrendChart({ series }) {
             const i = items[0].dataIndex;
             const p = series[i];
             return [
-              `Events: ${p.heatwave_events}`,
+              `Events: ${p.events}`,
               `Mean duration: ${p.mean_duration} d`,
               p.max_intensity != null ? `Peak intensity: ${p.max_intensity} °C` : "",
               `Data coverage: ${Math.round(p.coverage * 100)}%`,

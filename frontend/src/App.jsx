@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import RegionPicker from "./components/RegionPicker.jsx";
 import MapPicker from "./components/MapPicker.jsx";
 import TimeRange from "./components/TimeRange.jsx";
-import HazardSelect from "./components/HazardSelect.jsx";
+import HazardSelect, { hazardMeta } from "./components/HazardSelect.jsx";
 import TrendChart from "./components/TrendChart.jsx";
 import InsightCard from "./components/InsightCard.jsx";
 import ExportButtons from "./components/ExportButtons.jsx";
@@ -98,10 +98,10 @@ export default function App() {
             <>
               <InsightCard data={data} />
               <div className="chart-header">
-                <h3>Heatwave days per year</h3>
+                <h3>{hazardMeta(data.hazard).metric} per year</h3>
                 <ExportButtons params={toParams(form)} />
               </div>
-              <TrendChart series={data.series} />
+              <TrendChart series={data.series} hazard={data.hazard} />
               {data.cached && <p className="cache-note">⚡ Served from cache.</p>}
             </>
           )}
@@ -113,8 +113,9 @@ export default function App() {
       </div>
 
       <footer className="app-footer">
-        Data: Open-Meteo ERA5 · Heatwave = 3+ consecutive days above the regional 95th
-        percentile of daily max temperature (baseline {data?.baseline || "1991-2020"}).
+        Data: Open-Meteo ERA5 ·{" "}
+        {data?.hazard_definition ||
+          "Heatwave = 3+ consecutive days above the regional 95th percentile of daily max temperature."}
       </footer>
     </div>
   );

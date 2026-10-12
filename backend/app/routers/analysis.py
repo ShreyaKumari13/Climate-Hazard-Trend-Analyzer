@@ -50,11 +50,6 @@ def _build_query(
 
 
 async def _analyze(q: AnalysisQuery) -> dict:
-    if q.hazard is not HazardType.heatwave:
-        raise HTTPException(
-            status_code=501,
-            detail=f"Hazard '{q.hazard.value}' is not yet implemented. Use 'heatwave'.",
-        )
     try:
         return await run_analysis(q)
     except WeatherAPIError as exc:
@@ -112,7 +107,7 @@ async def export(
         return Response(
             content=to_csv(result),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{label}_heatwave.csv"'},
+            headers={"Content-Disposition": f'attachment; filename="{label}_{q.hazard.value}.csv"'},
         )
 
     try:
@@ -122,5 +117,5 @@ async def export(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{label}_heatwave.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{label}_{q.hazard.value}.pdf"'},
     )
